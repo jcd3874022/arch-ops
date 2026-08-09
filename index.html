@@ -124,11 +124,12 @@ async function leagueView(){
   '<div class="kv">Lineup: '+(L.roster_positions||[]).filter(p=>p!=='BN').join(' / ')+' + '+(L.roster_positions||[]).filter(p=>p==='BN').length+' BN</div>'+
   (L.scoring_settings===null||L.scoring_settings==='null'?'<div class="kv" style="color:var(--warn)">Scoring not yet published by commissioner \u2014 re-sync before draft.</div>':'')+
   '</div>';
-  for(const r of (d.rosters||[])){
+  const rlist=[...(d.rosters||[])].sort((a,b)=>(a.owner_id===L.my_user_id?-1:0)-(b.owner_id===L.my_user_id?-1:0));
+  for(const r of rlist){const mine=r.owner_id===L.my_user_id;
     const u=um[r.owner_id];
     const who=u?esc(u.team_name||u.display_name):'(unclaimed)';
     const sub=u&&u.team_name?esc(u.display_name):'';
-    h+='<div class="card"><h3>'+who+' <span class="badge">Roster '+r.roster_id+'</span></h3>'+(sub?'<div class="kv">'+sub+'</div>':'');
+    h+='<div class="card"'+(mine?' style="border-color:var(--acc)"':'')+'><h3>'+who+' <span class="badge'+(mine?' acc':'')+'">'+(mine?'MY TEAM \u00b7 ':'')+'Roster '+r.roster_id+'</span></h3>'+(sub?'<div class="kv">'+sub+'</div>':'');
     const order={QB:1,RB:2,WR:3,TE:4,K:5,DEF:6};
     const ps=[...(r.players||[])].sort((a,b)=>(order[a.position]||9)-(order[b.position]||9));
     h+='<table><tr><th>Pos</th><th>Player</th><th>Team</th><th>Status</th></tr>';
