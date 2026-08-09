@@ -40,6 +40,7 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 <nav>
 <button id="nb-teams" class="on" onclick="go('teams')">Teams</button>
 <button id="nb-players" onclick="go('players')">Players</button>
+<button id="nb-league" onclick="go('league')">League</button>
 <button id="nb-flow" onclick="go('flow')">Flow</button>
 <button id="nb-intel" onclick="go('intel')">Intel</button>
 </nav>
@@ -59,8 +60,8 @@ async function boot(){
     TEAMS=await api('teams');
   }catch(e){$('#meta').textContent='API unreachable \u2014 check Supabase functions';}
   go(view)}
-function go(v){view=v;['teams','players','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
-function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='flow')flow();else intel()}
+function go(v){view=v;['teams','players','league','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
+function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='league')leagueView();else if(view==='flow')flow();else intel()}
 async function flow(){
   M.innerHTML='<div class="legend"><span>\u2500\u2500 built &amp; running</span><span>\u254c\u254c pending</span></div><div id="flowwrap"><div class="spin">Rendering\u2026</div></div><div class="card" style="margin-top:10px"><h3>Reading the flow</h3><p class="kv">Sources feed Supabase; the decision engine (next build) crosses your players against opponent DC funnels, venue, and implied totals with editable glass-box weights; outputs run on the weekly cadence and hit your approval gates \u2014 auto for injury swaps, propose-and-approve for trades and big FAAB. Missing unlock: your league ID.</p></div>';
   try{const {svg}=await mermaid.render('ffflow',MM);$('#flowwrap').innerHTML=svg}catch(e){$('#flowwrap').innerHTML='<pre style="color:#333;font-size:11px;white-space:pre-wrap">'+esc(MM)+'</pre>'}
@@ -112,6 +113,29 @@ function pfilter(){
   let h='<table><tr><th onclick="psort(\'search_rank\')">Rank'+arw('search_rank')+'</th><th onclick="psort(\'full_name\')">Player'+arw('full_name')+'</th><th onclick="psort(\'team\')">Team'+arw('team')+'</th><th onclick="psort(\'position\')">Pos'+arw('position')+'</th><th onclick="psort(\'depth_chart_order\')">Depth'+arw('depth_chart_order')+'</th><th>Status</th></tr>';
   for(const p of rows)h+='<tr onclick="team(\''+p.team+'\')"><td>'+(p.search_rank??'\u2013')+'</td><td>'+esc(p.full_name)+'</td><td>'+esc(p.team)+'</td><td>'+p.position+'</td><td>'+(p.depth_chart_order??'\u2013')+'</td><td>'+(p.injury_status?'<span class="inj">'+esc(p.injury_status)+'</span>':'')+'</td></tr>';
   $('#plist').innerHTML=h+'</table><div class="kv" style="margin-top:8px">'+rows.length+' shown \u00b7 tap headers to sort \u00b7 Rank = Sleeper search_rank (popularity proxy, not a projection) \u00b7 tap a row for team intel.</div>'}
+async function leagueView(){
+  M.innerHTML='<div class="spin">Loading league\u2026</div>';
+  const d=await api('league');
+  if(!d||!d.league){M.innerHTML='<div class="kv">No league synced yet.</div>';return}
+  const L=d.league,um={};for(const u of (d.users||[]))um[u.user_id]=u;
+  const st=L.settings||{};
+  let h='<div class="card"><h3>'+esc(L.name)+' <span class="badge">'+esc(L.status)+'</span></h3>'+
+  '<div class="kv">'+L.total_rosters+' teams \u00b7 keeper (max '+(st.max_keepers??'?')+') \u00b7 FAAB $'+(st.waiver_budget??'?')+' \u00b7 trade deadline Wk '+(st.trade_deadline??'?')+' \u00b7 playoffs Wk '+(st.playoff_week_start??'?')+' ('+(st.playoff_teams??'?')+' teams)</div>'+
+  '<div class="kv">Lineup: '+(L.roster_positions||[]).filter(p=>p!=='BN').join(' / ')+' + '+(L.roster_positions||[]).filter(p=>p==='BN').length+' BN</div>'+
+  (L.scoring_settings===null||L.scoring_settings==='null'?'<div class="kv" style="color:var(--warn)">Scoring not yet published by commissioner \u2014 re-sync before draft.</div>':'')+
+  '</div>';
+  for(const r of (d.rosters||[])){
+    const u=um[r.owner_id];
+    const who=u?esc(u.team_name||u.display_name):'(unclaimed)';
+    const sub=u&&u.team_name?esc(u.display_name):'';
+    h+='<div class="card"><h3>'+who+' <span class="badge">Roster '+r.roster_id+'</span></h3>'+(sub?'<div class="kv">'+sub+'</div>':'');
+    const order={QB:1,RB:2,WR:3,TE:4,K:5,DEF:6};
+    const ps=[...(r.players||[])].sort((a,b)=>(order[a.position]||9)-(order[b.position]||9));
+    h+='<table><tr><th>Pos</th><th>Player</th><th>Team</th><th>Status</th></tr>';
+    for(const p of ps)h+='<tr'+(p.team&&p.position!=='DEF'?' onclick="team(\''+p.team+'\')"':'')+'><td>'+esc(p.position)+'</td><td>'+esc(p.full_name)+'</td><td>'+esc(p.team||'')+'</td><td>'+(p.injury_status?'<span class="inj">'+esc(p.injury_status)+'</span>':'')+'</td></tr>';
+    h+='</table></div>'}
+  M.innerHTML=h}
+
 function intel(){
   M.innerHTML=['<div class="card"><h3>Pipeline</h3><p class="kv">Sleeper players API \u2192 ff-sleeper-sync (Supabase edge fn) \u2192 ff_players \u2192 this site (GitHub Pages). Auto-resync when data &gt;24h old.</p></div>',
   '<div class="card"><h3>Verified 2026 signals</h3><p class="kv">BAL/LAR 11.5 league-high totals \u00b7 MIA/ARI 4.5 lowest \u00b7 Mahomes priced for early return \u00b7 Garrett traded to LAR \u00b7 Geno Smith to NYJ \u00b7 Wk1: NE-SEA SB rematch \u00b7 SOS: CHI/MIA/GB toughest, CLE/CIN/NO easiest</p></div>',
