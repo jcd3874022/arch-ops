@@ -93,15 +93,24 @@ async function team(ab){
   $('#roster').innerHTML=h}
 function sec(k,v){return v?'<div class="sec"><b>'+k+'</b><p>'+esc(v)+'</p></div>':''}
 async function players(){
-  M.innerHTML='<div class="row"><input id="pq" placeholder="Search name\u2026" oninput="pfilter()"><select id="pp" onchange="pfilter()"><option value="">All pos</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>K</option></select></div><div id="plist" class="spin">Loading\u2026</div>';
+  let topts='<option value="">All teams</option>';for(const t of TEAMS)topts+='<option>'+t.abbr+'</option>';
+  M.innerHTML='<div class="row"><input id="pq" placeholder="Search name\u2026" oninput="pfilter()"><select id="pp" onchange="pfilter()"><option value="">All pos</option><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>K</option></select></div>'+
+  '<div class="row"><select id="pt" onchange="pfilter()">'+topts+'</select><select id="ps" onchange="pfilter()"><option value="">All status</option><option value="healthy">Healthy only</option><option value="flagged">Injury-flagged</option></select></div>'+
+  '<div id="plist" class="spin">Loading\u2026</div>';
   window.PL=await api('players');pfilter()}
+let PSORT={k:'search_rank',d:1};
+function psort(k){if(PSORT.k===k)PSORT.d*=-1;else PSORT={k:k,d:1};pfilter()}
 function pfilter(){
-  const q=($('#pq')?.value||'').toLowerCase(),pos=$('#pp')?.value||'';
-  const rows=(window.PL||[]).filter(p=>(!q||p.full_name.toLowerCase().includes(q))&&(!pos||p.position===pos)).slice(0,150);
-  if(!rows.length){$('#plist').innerHTML='<div class="kv">No players yet.</div>';return}
-  let h='<table><tr><th>Rank</th><th>Player</th><th>Team</th><th>Pos</th><th>Depth</th><th>Status</th></tr>';
+  const q=($('#pq')?.value||'').toLowerCase(),pos=$('#pp')?.value||'',tm=$('#pt')?.value||'',st=$('#ps')?.value||'';
+  let rows=(window.PL||[]).filter(p=>(!q||p.full_name.toLowerCase().includes(q))&&(!pos||p.position===pos)&&(!tm||p.team===tm)&&(!st||(st==='healthy'?!p.injury_status:!!p.injury_status)));
+  const k=PSORT.k,d=PSORT.d;
+  rows.sort((a,b)=>{let x=a[k],y=b[k];if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;if(typeof x==='string')return d*x.localeCompare(y);return d*(x-y)});
+  rows=rows.slice(0,200);
+  if(!rows.length){$('#plist').innerHTML='<div class="kv">No players match these filters.</div>';return}
+  const arw=key=>PSORT.k===key?(PSORT.d===1?' \u2191':' \u2193'):'';
+  let h='<table><tr><th onclick="psort(\'search_rank\')">Rank'+arw('search_rank')+'</th><th onclick="psort(\'full_name\')">Player'+arw('full_name')+'</th><th onclick="psort(\'team\')">Team'+arw('team')+'</th><th onclick="psort(\'position\')">Pos'+arw('position')+'</th><th onclick="psort(\'depth_chart_order\')">Depth'+arw('depth_chart_order')+'</th><th>Status</th></tr>';
   for(const p of rows)h+='<tr onclick="team(\''+p.team+'\')"><td>'+(p.search_rank??'\u2013')+'</td><td>'+esc(p.full_name)+'</td><td>'+esc(p.team)+'</td><td>'+p.position+'</td><td>'+(p.depth_chart_order??'\u2013')+'</td><td>'+(p.injury_status?'<span class="inj">'+esc(p.injury_status)+'</span>':'')+'</td></tr>';
-  $('#plist').innerHTML=h+'</table><div class="kv" style="margin-top:8px">Rank = Sleeper search_rank (popularity proxy, not a projection). Tap a row for team intel.</div>'}
+  $('#plist').innerHTML=h+'</table><div class="kv" style="margin-top:8px">'+rows.length+' shown \u00b7 tap headers to sort \u00b7 Rank = Sleeper search_rank (popularity proxy, not a projection) \u00b7 tap a row for team intel.</div>'}
 function intel(){
   M.innerHTML=['<div class="card"><h3>Pipeline</h3><p class="kv">Sleeper players API \u2192 ff-sleeper-sync (Supabase edge fn) \u2192 ff_players \u2192 this site (GitHub Pages). Auto-resync when data &gt;24h old.</p></div>',
   '<div class="card"><h3>Verified 2026 signals</h3><p class="kv">BAL/LAR 11.5 league-high totals \u00b7 MIA/ARI 4.5 lowest \u00b7 Mahomes priced for early return \u00b7 Garrett traded to LAR \u00b7 Geno Smith to NYJ \u00b7 Wk1: NE-SEA SB rematch \u00b7 SOS: CHI/MIA/GB toughest, CLE/CIN/NO easiest</p></div>',
