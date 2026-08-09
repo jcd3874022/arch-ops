@@ -55,7 +55,7 @@ async function boot(){
   const p=new URLSearchParams(location.search);if(p.get('view'))view=p.get('view');
   try{
     const m=await api('meta');
-    $('#meta').textContent=(m.playerCount||0)+' players synced'+(m.last?' \u00b7 last sync '+m.last.slice(0,16).replace('T',' ')+'Z':'')+(m.syncTriggered?' \u00b7 refresh triggered':'');
+    $('#meta').textContent=(m.playerCount||0)+' players \u00b7 '+(m.contractWatch||0)+' contract flags'+(m.last?' \u00b7 last sync '+m.last.slice(0,16).replace('T',' ')+'Z':'')+(m.syncTriggered?' \u00b7 refresh triggered':'');
     TEAMS=await api('teams');
   }catch(e){$('#meta').textContent='API unreachable \u2014 check Supabase functions';}
   go(view)}
@@ -81,7 +81,8 @@ async function team(ab){
   '<div class="kv">HC '+esc(t.hc)+' \u00b7 OC '+esc(t.oc)+' \u00b7 DC '+esc(t.dc)+'</div><div class="kv">Play-caller: '+esc(t.play_caller)+'</div>'+
   '<div class="kv">Pace '+esc(t.pace)+' \u00b7 Pass lean '+esc(t.pass_lean)+' \u00b7 4th-down '+esc(t.fourth_down)+'</div>'+
   sec('Identity',t.identity)+sec('OC profile',t.oc_profile)+sec('DC profile',t.dc_profile)+sec('Fantasy angle',t.fantasy_angle)+sec('Vs opponent types',t.vs_opponents)+
-  '</div><div class="card"><h3>Depth chart <span class="badge">live \u00b7 Sleeper</span></h3><div id="roster" class="spin">Loading\u2026</div></div>';
+  '</div><div id="cwrap"></div><div class="card"><h3>Depth chart <span class="badge">live \u00b7 Sleeper</span></h3><div id="roster" class="spin">Loading\u2026</div></div>';
+  api('contracts&team='+ab).then(cs=>{if(Array.isArray(cs)&&cs.length){let h='<div class="card"><h3>Contract watch <span class="badge warn">'+cs.length+' flag'+(cs.length>1?'s':'')+'</span></h3>';for(const c of cs){h+='<div class="sec"><b>'+esc(c.player)+' \u00b7 '+esc(c.position)+' \u00b7 Tier '+esc(c.signal_tier)+'</b><p>'+esc((c.status||'').replace(/_/g,' '))+' \u2014 '+esc(c.contract_context||'')+(c.incentive_status==='PARTIAL_PUBLIC'?' Incentives: '+esc(c.incentive_detail||''):'')+(c.tag_context?' '+esc(c.tag_context):'')+'</p></div>'}h+='<div class="kv" style="margin-top:8px">Guardrail: contract status never boosts projections \u2014 alerts only. UNKNOWN incentives \u2260 none.</div></div>';document.querySelector('#cwrap').innerHTML=h}});
   const ps=await api('players&team='+ab);
   if(!Array.isArray(ps)||!ps.length){$('#roster').innerHTML='<div class="kv">No players yet \u2014 sync may be running.</div>';return}
   const order=['QB','RB','WR','TE','K'];let h='';
@@ -105,6 +106,7 @@ function intel(){
   M.innerHTML=['<div class="card"><h3>Pipeline</h3><p class="kv">Sleeper players API \u2192 ff-sleeper-sync (Supabase edge fn) \u2192 ff_players \u2192 this site (GitHub Pages). Auto-resync when data &gt;24h old.</p></div>',
   '<div class="card"><h3>Verified 2026 signals</h3><p class="kv">BAL/LAR 11.5 league-high totals \u00b7 MIA/ARI 4.5 lowest \u00b7 Mahomes priced for early return \u00b7 Garrett traded to LAR \u00b7 Geno Smith to NYJ \u00b7 Wk1: NE-SEA SB rematch \u00b7 SOS: CHI/MIA/GB toughest, CLE/CIN/NO easiest</p></div>',
   '<div class="card"><h3>Ingest queue</h3><p class="kv">1. Full schedule + byes \u00b7 2. Remaining win totals \u00b7 3. Post-camp depth charts (CLE/NO/LV/IND QBs) \u00b7 4. 2026 OL/DL grades \u00b7 5. Referee crews (Wk1) \u00b7 6. Weekly PROE/pace (Wk4+, retires coach priors)</p></div>',
+  '<div class="card"><h3>Contract layer</h3><p class="kv">17 active flags (as of 2026-08-09): Mayfield, Pickens (tag), Nacua &amp; Adams (LAR), Chase Brown, Kraft, LaPorta, Vea (TB DT dispute), Kyler Murray (MIN prove-it), Brissett (ARI incentives), more. Three-state incentive rule: KNOWN / PARTIAL_PUBLIC / UNKNOWN \u2014 UNKNOWN never means none. Resolved &amp; cleared: Olave, Taylor, Bijan, Gibbs (incentive-monitor kept), Flowers. Canonical doc: repo /layers/.</p></div>',
   '<div class="card"><h3>Provenance</h3><p class="kv">Coach/team intel: hand-verified July 2026. Tendencies are career-history priors, not measured 2026 data. Players: live Sleeper API, timestamped per row. No fabricated numbers \u2014 missing = pending, never backfilled.</p></div>'].join('')}
 boot();
 </script></body></html>
