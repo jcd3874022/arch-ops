@@ -40,6 +40,7 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 <nav>
 <button id="nb-teams" class="on" onclick="go('teams')">Teams</button>
 <button id="nb-players" onclick="go('players')">Players</button>
+<button id="nb-draft" onclick="go('draft')">Draft</button>
 <button id="nb-league" onclick="go('league')">League</button>
 <button id="nb-flow" onclick="go('flow')">Flow</button>
 <button id="nb-intel" onclick="go('intel')">Intel</button>
@@ -60,8 +61,8 @@ async function boot(){
     TEAMS=await api('teams');
   }catch(e){$('#meta').textContent='API unreachable \u2014 check Supabase functions';}
   go(view)}
-function go(v){view=v;['teams','players','league','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
-function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='league')leagueView();else if(view==='flow')flow();else intel()}
+function go(v){view=v;['teams','players','draft','league','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
+function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='league')leagueView();else if(view==='flow')flow();else intel()}
 async function flow(){
   M.innerHTML='<div class="legend"><span>\u2500\u2500 built &amp; running</span><span>\u254c\u254c pending</span></div><div id="flowwrap"><div class="spin">Rendering\u2026</div></div><div class="card" style="margin-top:10px"><h3>Reading the flow</h3><p class="kv">Sources feed Supabase; the decision engine (next build) crosses your players against opponent DC funnels, venue, and implied totals with editable glass-box weights; outputs run on the weekly cadence and hit your approval gates \u2014 auto for injury swaps, propose-and-approve for trades and big FAAB. Missing unlock: your league ID.</p></div>';
   try{const {svg}=await mermaid.render('ffflow',MM);$('#flowwrap').innerHTML=svg}catch(e){$('#flowwrap').innerHTML='<pre style="color:#333;font-size:11px;white-space:pre-wrap">'+esc(MM)+'</pre>'}
@@ -113,6 +114,44 @@ function pfilter(){
   let h='<table><tr><th onclick="psort(\'search_rank\')">Rank'+arw('search_rank')+'</th><th onclick="psort(\'full_name\')">Player'+arw('full_name')+'</th><th onclick="psort(\'team\')">Team'+arw('team')+'</th><th onclick="psort(\'position\')">Pos'+arw('position')+'</th><th onclick="psort(\'depth_chart_order\')">Depth'+arw('depth_chart_order')+'</th><th>Status</th></tr>';
   for(const p of rows)h+='<tr onclick="team(\''+p.team+'\')"><td>'+(p.search_rank??'\u2013')+'</td><td>'+esc(p.full_name)+'</td><td>'+esc(p.team)+'</td><td>'+p.position+'</td><td>'+(p.depth_chart_order??'\u2013')+'</td><td>'+(p.injury_status?'<span class="inj">'+esc(p.injury_status)+'</span>':'')+'</td></tr>';
   $('#plist').innerHTML=h+'</table><div class="kv" style="margin-top:8px">'+rows.length+' shown \u00b7 tap headers to sort \u00b7 Rank = Sleeper search_rank (popularity proxy, not a projection) \u00b7 tap a row for team intel.</div>'}
+let BOARD=null,GONE={};
+try{GONE=JSON.parse(localStorage.getItem('ffgone')||'{}')}catch(e){}
+function saveGone(){try{localStorage.setItem('ffgone',JSON.stringify(GONE))}catch(e){}}
+async function draftView(){
+  M.innerHTML='<div class="spin">Loading board\u2026</div>';
+  BOARD=await api('board');drawBoard()}
+function strike(id){GONE[id]=!GONE[id];if(!GONE[id])delete GONE[id];saveGone();drawBoard()}
+function drawBoard(){
+  const d=BOARD;if(!d||!d.rows){M.innerHTML='<div class="kv">Board unavailable.</div>';return}
+  const pos=$('#dp')?.value||'',hideG=$('#dh')?!$('#dh').checked:true,q=($('#dq')?.value||'').toLowerCase();
+  const gone=Object.keys(GONE).length;
+  const picks=(d.my_picks||[]);const nextPick=picks.find(p=>p>gone+1)||picks[0];
+  let live=d.rows.filter(r=>!r.keep&&!GONE[r.sleeper_id]);
+  let top='<div class="card"><h3>Your next pick: #'+nextPick+' <span class="badge acc">'+gone+' players marked gone</span></h3>'+
+  '<div class="kv">Your picks: '+picks.join(', ')+' (R6/R7 paid for Bucky + JSN)</div>'+
+  '<div class="kv">Best available: '+live.slice(0,3).map(r=>r.full_name+' ('+r.position+', '+r.score+')').join(' \u00b7 ')+'</div></div>';
+  top+='<div class="row"><input id="dq" placeholder="Search\u2026" value="'+(q||'')+'" oninput="drawBoard()"><select id="dp" onchange="drawBoard()"><option value=""'+(pos===''?' selected':'')+'>All pos</option>'+['QB','RB','WR','TE','K'].map(p=>'<option'+(pos===p?' selected':'')+'>'+p+'</option>').join('')+'</select></div>'+
+  '<div class="row"><label class="kv"><input type="checkbox" id="dh" '+(hideG?'':'checked')+' onchange="drawBoard()"> show marked-gone</label><button class="back" style="margin:0" onclick="weightsPanel()">\u2699 weights</button></div>';
+  let rows=d.rows.filter(r=>(!pos||r.position===pos)&&(!q||r.full_name.toLowerCase().includes(q)));
+  if(hideG)rows=rows.filter(r=>!GONE[r.sleeper_id]||r.keep);
+  let h='<table><tr><th>#</th><th>Player</th><th>Pos</th><th>Bye</th><th>Score</th><th></th></tr>';let i=0;
+  for(const r of rows.slice(0,150)){i++;
+    const kd=r.keep?'<span class="badge warn">KEEP \u00b7 '+esc(r.keep.manager.split(' ')[0])+'</span>':'';
+    const struck=GONE[r.sleeper_id]?' style="opacity:.35;text-decoration:line-through"':'';
+    h+='<tr'+struck+' onclick="strike(\''+r.sleeper_id+'\')"><td>'+i+'</td><td>'+esc(r.full_name)+' <span class="badge">'+esc(r.team||'')+'</span> '+kd+(r.injury_status?' <span class="inj">'+esc(r.injury_status)+'</span>':'')+'</td><td>'+r.position+'</td><td>'+(r.bye??'')+'</td><td title="'+esc(r.detail)+'">'+r.score+'</td><td class="kv">'+(r.playoff>0?'+'+r.playoff+'\u26a1':'')+'</td></tr>'}
+  h+='</table><div class="kv" style="margin-top:8px">Tap a row to mark drafted (persists on this phone). Score = (300 \u2212 Sleeper rank) + playoff-window pts + bye fit \u2014 tap-hold a score for the full math. Sleeper rank is a market proxy; projection feed pending. KEEP rows are projected/declared keepers \u2014 excluded from best-available.</div>';
+  M.innerHTML=top+h;if(q){const el=$('#dq');el.focus();el.setSelectionRange(q.length,q.length)}}
+async function weightsPanel(){
+  const d=BOARD;let h='<button class="back" onclick="drawBoard()">\u2190 Board</button><div class="card"><h3>Glass-box weights</h3>';
+  for(const w of d.weights){if(w.key==='base_formula'){h+='<div class="sec"><b>Formula</b><p>'+esc(w.description)+'</p></div>';continue}
+    h+='<div class="sec"><b>'+esc(w.key)+' = <input style="width:70px" type="number" step="0.5" id="w_'+w.key+'" value="'+w.value+'"></b><p>'+esc(w.description)+'</p></div>'}
+  h+='<button class="back" style="margin-top:10px;color:var(--acc)" onclick="saveWeights()">Save &amp; re-score</button></div>';
+  M.innerHTML=h}
+async function saveWeights(){
+  for(const w of BOARD.weights){if(w.key==='base_formula')continue;
+    const v=$('#w_'+w.key).value;if(v!=w.value)await api('setweight&key='+w.key+'&value='+v)}
+  BOARD=await api('board');drawBoard()}
+
 async function leagueView(){
   M.innerHTML='<div class="spin">Loading league\u2026</div>';
   const d=await api('league');
