@@ -169,6 +169,14 @@ async function leagueView(){
     const who=u?esc(u.team_name||u.display_name):'(unclaimed)';
     const sub=u&&u.team_name?esc(u.display_name):'';
     h+='<div class="card"'+(mine?' style="border-color:var(--acc)"':'')+'><h3>'+who+' <span class="badge'+(mine?' acc':'')+'">'+(mine?'MY TEAM \u00b7 ':'')+'Roster '+r.roster_id+'</span></h3>'+(sub?'<div class="kv">'+sub+'</div>':'');
+    if(r.manager_name)h+='<div class="kv">'+esc(r.manager_name)+(r.draft_slot_2026?' \u00b7 picks #'+r.draft_slot_2026:'')+'</div>';
+    const sc=r.scouting;
+    if(sc&&!mine){h+='<div class="sec"><b>Scout \u00b7 threat: '+esc(sc.threat)+'</b><p>'+esc(sc.read)+'</p>'+
+      (sc.keeps?'<p style="margin-top:6px"><span style="color:var(--acc)">Keeps:</span> '+esc(sc.keeps)+'</p>':'')+
+      (sc.weakness?'<p style="margin-top:6px"><span style="color:var(--warn)">Weakness:</span> '+esc(sc.weakness)+'</p>':'')+
+      (sc.trade_approach?'<p style="margin-top:6px"><span style="color:var(--dim)">Trade:</span> '+esc(sc.trade_approach)+'</p>':'')+
+      (sc.beat_him?'<p style="margin-top:6px"><span style="color:var(--dim)">Beat him:</span> '+esc(sc.beat_him)+'</p>':'')+'</div>';}
+
     const order={QB:1,RB:2,WR:3,TE:4,K:5,DEF:6};
     const ps=[...(r.players||[])].sort((a,b)=>(order[a.position]||9)-(order[b.position]||9));
     h+='<table><tr><th>Pos</th><th>Player</th><th>Team</th><th>Status</th></tr>';
