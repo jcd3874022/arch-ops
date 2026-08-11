@@ -52,7 +52,15 @@ const MM='flowchart TB\n subgraph SRC["DATA SOURCES"]\n  S1["Sleeper API - roste
 const $=s=>document.querySelector(s);const M=$('#main');
 let TEAMS=[],view='teams';
 const esc=s=>(s??'').toString().replace(/</g,'&lt;');
-async function api(q){const r=await fetch(API+'?api='+q);return r.json()}
+function ffkey(){let k=null;try{k=localStorage.getItem('ffkey')}catch(e){}
+  if(!k){k=prompt('Access key:');if(k){try{localStorage.setItem('ffkey',k)}catch(e){}}}
+  return k||''}
+async function api(q){
+  let r=await fetch(API+'?api='+q,{headers:{'x-ff-key':(function(){try{return localStorage.getItem('ffkey')||''}catch(e){return ''}})()}});
+  if(r.status===401){try{localStorage.removeItem('ffkey')}catch(e){}
+    r=await fetch(API+'?api='+q,{headers:{'x-ff-key':ffkey()}});
+    if(r.status===401){return {error:'locked'}}}
+  return r.json()}
 async function boot(){
   const p=new URLSearchParams(location.search);if(p.get('view'))view=p.get('view');
   try{
@@ -122,7 +130,8 @@ async function draftView(){
   BOARD=await api('board');drawBoard()}
 function strike(id){GONE[id]=!GONE[id];if(!GONE[id])delete GONE[id];saveGone();drawBoard()}
 function drawBoard(){
-  const d=BOARD;if(!d||!d.rows){M.innerHTML='<div class="kv">Board unavailable.</div>';return}
+  const d=BOARD;if(d&&d.error==='locked'){M.innerHTML='<div class="kv">Locked. Wrong or missing access key \u2014 reload to retry.</div>';return}
+  if(!d||!d.rows){M.innerHTML='<div class="kv">Board unavailable.</div>';return}
   const pos=$('#dp')?.value||'',hideG=$('#dh')?!$('#dh').checked:true,q=($('#dq')?.value||'').toLowerCase();
   const gone=Object.keys(GONE).length;
   const picks=(d.my_picks||[]);const nextPick=picks.find(p=>p>gone+1)||picks[0];
@@ -155,6 +164,7 @@ async function saveWeights(){
 async function leagueView(){
   M.innerHTML='<div class="spin">Loading league\u2026</div>';
   const d=await api('league');
+  if(d&&d.error==='locked'){M.innerHTML='<div class="kv">Locked. Wrong or missing access key \u2014 reload to retry.</div>';return}
   if(!d||!d.league){M.innerHTML='<div class="kv">No league synced yet.</div>';return}
   const L=d.league,um={};for(const u of (d.users||[]))um[u.user_id]=u;
   const st=L.settings||{};
