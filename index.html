@@ -41,6 +41,7 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 <button id="nb-teams" class="on" onclick="go('teams')">Teams</button>
 <button id="nb-players" onclick="go('players')">Players</button>
 <button id="nb-draft" onclick="go('draft')">Draft</button>
+<button id="nb-model" onclick="go('model')">Model</button>
 <button id="nb-league" onclick="go('league')">League</button>
 <button id="nb-flow" onclick="go('flow')">Flow</button>
 <button id="nb-intel" onclick="go('intel')">Intel</button>
@@ -69,8 +70,8 @@ async function boot(){
     TEAMS=await api('teams');
   }catch(e){$('#meta').textContent='API unreachable \u2014 check Supabase functions';}
   go(view)}
-function go(v){view=v;['teams','players','draft','league','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
-function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='league')leagueView();else if(view==='flow')flow();else intel()}
+function go(v){view=v;['teams','players','draft','model','league','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
+function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='model')modelView();else if(view==='league')leagueView();else if(view==='flow')flow();else intel()}
 async function flow(){
   M.innerHTML='<div class="legend"><span>\u2500\u2500 built &amp; running</span><span>\u254c\u254c pending</span></div><div id="flowwrap"><div class="spin">Rendering\u2026</div></div><div class="card" style="margin-top:10px"><h3>Reading the flow</h3><p class="kv">Sources feed Supabase; the decision engine (next build) crosses your players against opponent DC funnels, venue, and implied totals with editable glass-box weights; outputs run on the weekly cadence and hit your approval gates \u2014 auto for injury swaps, propose-and-approve for trades and big FAAB. Missing unlock: your league ID.</p></div>';
   try{const {svg}=await mermaid.render('ffflow',MM);$('#flowwrap').innerHTML=svg}catch(e){$('#flowwrap').innerHTML='<pre style="color:#333;font-size:11px;white-space:pre-wrap">'+esc(MM)+'</pre>'}
@@ -160,6 +161,35 @@ async function saveWeights(){
   for(const w of BOARD.weights){if(w.key==='base_formula')continue;
     const v=$('#w_'+w.key).value;if(v!=w.value)await api('setweight&key='+w.key+'&value='+v)}
   BOARD=await api('board');drawBoard()}
+
+async function modelView(){
+  M.innerHTML='<div class="spin">Loading model\u2026</div>';
+  const d=await api('model');
+  if(d&&d.error==='locked'){M.innerHTML='<div class="kv">Locked. Wrong or missing access key \u2014 reload to retry.</div>';return}
+  if(!Array.isArray(d)){M.innerHTML='<div class="kv">Model unavailable.</div>';return}
+  let h='<div class="card"><h3>Behavioral Model \u00b7 Round 1 script</h3><div class="kv">Per-seat predictions from 708 warehoused picks (2022-25), loyalty locks + the reclamation law. Bars = confidence. Re-solves live on draft night.</div></div>';
+  for(const m of d){
+    const bp=m.behavior_params||{};const mine=m.seat===11;
+    h+='<div class="card"'+(mine?' style="border-color:var(--acc)"':'')+'><h3>Seat '+m.seat+' \u00b7 '+esc(m.manager)+(mine?' <span class="badge acc">YOU</span>':'')+'</h3>';
+    for(const c of (m.r1_candidates||[])){
+      h+='<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>'+esc(c.p)+'</span><span class="kv">'+c.w+'%</span></div>'+
+      '<div style="background:#1c2733;border-radius:4px;height:8px"><div style="height:8px;border-radius:4px;width:'+c.w+'%;background:'+(mine?'var(--acc)':(c.w>=65?'#e8544f':'#c8963e'))+'"></div></div>'+
+      '<div class="kv" style="margin-top:2px">'+esc(c.why||'')+'</div></div>'}
+    let chips=[];
+    if(bp.qb_round)chips.push('QB rd '+bp.qb_round[0]+(bp.qb_round[1]!==bp.qb_round[0]?'-'+bp.qb_round[1]:''));
+    if(bp.style)chips.push(esc(String(bp.style)).replace(/_/g,' '));
+    if(bp.trade_up_bias)chips.push('\u26a0 trades UP');
+    if(bp.trade_down_bias)chips.push('\u26a0 trades DOWN');
+    if(bp.sleeper_snipe)chips.push('\u26a0 sleeper sniper');
+    if(bp.turn_drafter)chips.push('turn-pairs');
+    if(bp.first_rb_round)chips.push('1st RB rd '+bp.first_rb_round[0]+'-'+bp.first_rb_round[1]);
+    if(bp.def_round)chips.push('DEF rd '+bp.def_round[0]);
+    if(chips.length)h+='<div style="margin-top:6px">'+chips.map(x=>'<span class="badge">'+x+'</span>').join(' ')+'</div>';
+    if(bp.loyalty&&bp.loyalty.length)h+='<div class="kv" style="margin-top:6px">Loyalty: '+bp.loyalty.map(esc).join(' \u00b7 ')+'</div>';
+    if(bp.guards)h+='<div class="kv" style="margin-top:6px;color:var(--warn)">Guards: '+bp.guards.map(esc).join(' \u00b7 ')+'</div>';
+    if(bp.anchor)h+='<div class="kv" style="margin-top:4px">Anchor: '+esc(bp.anchor)+'</div>';
+    h+='</div>'}
+  M.innerHTML=h}
 
 async function leagueView(){
   M.innerHTML='<div class="spin">Loading league\u2026</div>';
