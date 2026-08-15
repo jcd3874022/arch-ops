@@ -159,7 +159,10 @@ function warDraw(){
       +'<div class="w-headrow" style="margin-top:6px">'+wImg(p.sleeper_id,'w-face')+'<div><div class="w-name">'+p.player+'</div>'
       +'<div class="w-sub"><span class="w-chip pos">'+p.position+'</span>'
       +'<span class="w-chip">ADP '+p.adp+'</span>'
-      +'<span class="w-chip">'+(p.surv_next>0?(p.surv_next+'% to last till #'+(a.next_pick||'?')):'gone by your next')+'</span></div></div></div>';
+      +'<span class="w-chip">'+(p.surv_next>0?(p.surv_next+'% to last till #'+(a.next_pick||'?')):'gone by your next')+'</span>'
+      +(Number(p.matchup_pts)?'<span class="w-chip" style="border-color:'+(p.matchup_pts>0?'var(--acc);color:var(--acc)':'var(--bad);color:var(--bad)')+'">playoffs '+(p.matchup_pts>0?'+':'')+p.matchup_pts+'</span>':'')
+      +(Number(p.playoff_bye_pts)?'<span class="w-chip" style="border-color:var(--bad);color:var(--bad)">wk14 BYE</span>':'')
+      +'</div>'+(p.matchup_detail?'<div class="w-note" style="font-style:normal">wk14-16: '+p.matchup_detail+'</div>':'')+'</div></div>';
     const ho=a.holes&&a.holes.by_position;
     if(ho){h+='<div class="w-holes">'+Object.entries(ho).map(([k,v])=>'<span class="w-hole'+(v.short>0?'':' ok')+'">'+k+' '+v.have+'/'+v.need+'</span>').join('')+'</div>'}
     h+='<div class="w-note">Advice only \u2014 you tap the pick in Sleeper.</div></div>';
