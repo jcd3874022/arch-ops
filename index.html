@@ -45,6 +45,7 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 <button id="nb-league" onclick="go('league')">League</button>
 <button id="nb-flow" onclick="go('flow')">Flow</button>
 <button id="nb-intel" onclick="go('intel')">Intel</button>
+<button id="nb-war" onclick="go('war')">War</button>
 </nav>
 <script>
 const API='https://ekmuzafyqlbqttmfxsgw.supabase.co/functions/v1/ff-dashboard';
@@ -70,8 +71,49 @@ async function boot(){
     TEAMS=await api('teams');
   }catch(e){$('#meta').textContent='API unreachable \u2014 check Supabase functions';}
   go(view)}
-function go(v){view=v;['teams','players','draft','model','league','flow','intel'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
-function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='model')modelView();else if(view==='league')leagueView();else if(view==='flow')flow();else intel()}
+function go(v){view=v;['teams','players','draft','model','league','flow','intel','war'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
+function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='model')modelView();else if(view==='league')leagueView();else if(view==='flow')flow();else if(view==='war')warView();else intel()}
+
+let WARMODE=(function(){try{return localStorage.getItem('warmode')||'REHEARSAL'}catch(e){return 'REHEARSAL'}})();
+let WARTIMER=null,WARLAST=null;
+function warSetMode(m){WARMODE=m;try{localStorage.setItem('warmode',m)}catch(e){};warStop();warView()}
+function warStop(){if(WARTIMER){clearInterval(WARTIMER);WARTIMER=null}}
+async function warPoll(){
+  const d=await api('war&op=poll&draft='+encodeURIComponent(WARMODE==='LIVE'?'':'REHEARSAL')).catch(()=>null);
+  if(d&&!d.error){WARLAST=d;warDraw()}
+}
+function warStart(){warStop();warPoll();WARTIMER=setInterval(warPoll,4000);warDraw()}
+async function warFake(){
+  const n=$('#wfp')?.value?.trim();if(!n)return;
+  const r=await api('war&op=fake&draft=REHEARSAL&player='+encodeURIComponent(n));
+  if(r&&r.error){$('#wmsg').textContent=r.error}else{$('#wfp').value='';warPoll()}
+}
+async function warReset(){warStop();const r=await api('war&op=reset&draft=REHEARSAL');$('#wmsg').textContent=r&&r.reset?('Reset. Keepers seeded: '+r.keepers_seeded):'reset failed';warPoll()}
+function warDraw(){
+  const d=WARLAST;const live=WARMODE==='LIVE';
+  let h='<div class="card"><h3>War Room \u2014 '+(live?'LIVE DRAFT':'REHEARSAL')+'</h3>';
+  h+='<div class="kv"><button onclick="warSetMode(\'REHEARSAL\')" '+(live?'':'disabled')+'>Rehearsal</button> <button onclick="warSetMode(\'LIVE\')" '+(live?'disabled':'')+'>Live</button> <button onclick="warStart()">'+(WARTIMER?'Polling\u20264s':'Start')+'</button> <button onclick="warStop()">Stop</button>'+(live?'':' <button onclick="warReset()">Reset board</button>')+'</div>';
+  if(!live)h+='<div class="kv"><input id="wfp" placeholder="fake pick: player name" style="width:60%"> <button onclick="warFake()">Draft him</button></div>';
+  h+='<div id="wmsg" class="kv"></div></div>';
+  if(d){
+    h+='<div class="card"><h3>On the clock: pick '+d.on_clock.pick+' (slot '+d.on_clock.slot+(d.on_clock.roster?', roster '+d.on_clock.roster:'')+')</h3>';
+    h+='<div class="kv">Your next pick: <b>'+(d.my_next_pick??'\u2014 none left')+'</b> \u00b7 last landed: '+d.last_pick_no+'</div></div>';
+    const a=d.advice;
+    if(a&&a.primary){
+      h+='<div class="card" style="border-left:4px solid #4a9"><h3>TAKE: '+a.primary.player+' \u00b7 '+a.primary.position+'</h3>';
+      h+='<div class="kv">score '+a.primary.war_score+' \u00b7 adp '+a.primary.adp+' \u00b7 survives to next: '+a.primary.surv_next+'%</div>';
+      if(a.contingencies)h+='<div class="kv">Then: '+a.contingencies.map(c=>c.player+' ('+c.position+' '+c.war_score+')').join(' \u00b7 ')+'</div>';
+      const ho=a.holes;if(ho&&ho.by_position){h+='<div class="kv">Holes: '+Object.entries(ho.by_position).filter(([k,v])=>v.short>0).map(([k,v])=>k+' '+v.have+'/'+v.need).join(' \u00b7 ')+'</div>'}
+      h+='<div class="kv" style="opacity:.7">advice only \u2014 you tap the pick in Sleeper</div></div>';
+    }
+    if(d.recent&&d.recent.length){
+      h+='<div class="card"><h3>Recent</h3>'+d.recent.map(p=>'<div class="kv">'+(p.pick_no>0?('#'+p.pick_no):'K')+' '+p.player_name+' ('+(p.position||'?')+') r'+p.roster_id+(p.is_keeper?' \ud83d\udd12':'')+'</div>').join('')+'</div>';
+    }
+  } else h+='<div class="spin">Press Start</div>';
+  M.innerHTML=h;
+}
+async function warView(){warDraw();if(!WARLAST)warPoll()}
+
 async function flow(){
   M.innerHTML='<div class="legend"><span>\u2500\u2500 built &amp; running</span><span>\u254c\u254c pending</span></div><div id="flowwrap"><div class="spin">Rendering\u2026</div></div><div class="card" style="margin-top:10px"><h3>Reading the flow</h3><p class="kv">Sources feed Supabase; the decision engine (next build) crosses your players against opponent DC funnels, venue, and implied totals with editable glass-box weights; outputs run on the weekly cadence and hit your approval gates \u2014 auto for injury swaps, propose-and-approve for trades and big FAAB. Missing unlock: your league ID.</p></div>';
   try{const {svg}=await mermaid.render('ffflow',MM);$('#flowwrap').innerHTML=svg}catch(e){$('#flowwrap').innerHTML='<pre style="color:#333;font-size:11px;white-space:pre-wrap">'+esc(MM)+'</pre>'}
