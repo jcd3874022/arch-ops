@@ -34,6 +34,11 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 #flowwrap{background:#fff;border-radius:12px;padding:8px;overflow-x:auto}
 #flowwrap svg{min-width:640px}
 .legend{display:flex;gap:14px;margin:8px 2px;color:var(--dim);font-size:12px}
+.w-face{width:74px;height:74px;border-radius:12px;object-fit:cover;object-position:top center;background:#0b0f14 url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath fill=%27%23243040%27 d=%27M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-5 0-9 2.5-9 5.5V22h18v-2.5c0-3-4-5.5-9-5.5z%27/%3E%3C/svg%3E") center/60% no-repeat;border:1px solid var(--line);flex:0 0 auto}
+.w-headrow{display:flex;gap:12px;align-items:flex-start}
+.w-headrow>div{min-width:0;flex:1}
+.w-face-sm{width:30px;height:30px;border-radius:8px;object-fit:cover;object-position:top center;background:#0b0f14;border:1px solid var(--line);flex:0 0 auto}
+
 .w-strip{display:flex;gap:8px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:10px}
 .w-strip .lbl{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.07em}
 .w-strip .val{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
@@ -130,6 +135,9 @@ async function warFake(){
   if(r&&r.error){$('#wmsg').textContent=r.error}else{$('#wfp').value='';warPoll()}
 }
 async function warReset(){warStop();const r=await api('war&op=reset&draft=REHEARSAL');$('#wmsg').textContent=r&&r.reset?('Reset. Keepers seeded: '+r.keepers_seeded):'reset failed';warPoll()}
+function wImg(id,cls){if(!id)return '<span class="'+cls+'"></span>';
+  const u=/^[A-Z]{2,3}$/.test(id)?('https://sleepercdn.com/images/team_logos/nfl/'+id.toLowerCase()+'.png'):('https://sleepercdn.com/content/nfl/players/thumb/'+id+'.jpg');
+  return '<img class="'+cls+'" src="'+u+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">'}
 function warDraw(){
   const d=WARLAST,live=WARMODE==='LIVE';
   const mine=d&&d.my_next_pick!=null&&d.on_clock&&d.on_clock.pick===d.my_next_pick;
@@ -148,17 +156,17 @@ function warDraw(){
     const p=a.primary;
     h+='<div class="w-hero'+(mine?'':' wait')+'">'
       +'<div class="w-eyebrow">'+(mine?'Take him now':'If it were your pick')+'</div>'
-      +'<div class="w-name">'+p.player+'</div>'
+      +'<div class="w-headrow" style="margin-top:6px">'+wImg(p.sleeper_id,'w-face')+'<div><div class="w-name">'+p.player+'</div>'
       +'<div class="w-sub"><span class="w-chip pos">'+p.position+'</span>'
       +'<span class="w-chip">ADP '+p.adp+'</span>'
-      +'<span class="w-chip">'+(p.surv_next>0?(p.surv_next+'% to last till #'+(a.next_pick||'?')):'gone by your next')+'</span></div>';
+      +'<span class="w-chip">'+(p.surv_next>0?(p.surv_next+'% to last till #'+(a.next_pick||'?')):'gone by your next')+'</span></div></div></div>';
     const ho=a.holes&&a.holes.by_position;
     if(ho){h+='<div class="w-holes">'+Object.entries(ho).map(([k,v])=>'<span class="w-hole'+(v.short>0?'':' ok')+'">'+k+' '+v.have+'/'+v.need+'</span>').join('')+'</div>'}
     h+='<div class="w-note">Advice only \u2014 you tap the pick in Sleeper.</div></div>';
     if(a.contingencies&&a.contingencies.length){
       h+='<div class="card"><h3>If he\u2019s gone</h3>';
       h+=a.contingencies.map(c=>{const s=Math.max(0,Math.min(100,c.surv_next||0));const cls=s>60?'':(s>30?' mid':' low');
-        return '<div class="w-alt"><span class="w-chip pos">'+c.position+'</span><span class="nm">'+c.player+'</span>'
+        return '<div class="w-alt">'+wImg(c.sleeper_id,'w-face-sm')+'<span class="nm">'+c.player+' <span style="color:var(--dim);font-size:11px">'+c.position+'</span></span>'
           +'<span class="w-bar"><span class="w-fill'+cls+'" style="width:'+s+'%"></span></span><span class="pc">'+s+'%</span></div>'}).join('');
       h+='<div class="w-note">Bar = odds he survives to your next pick.</div></div>';
     }
