@@ -80,6 +80,14 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 .w-tools button:disabled{opacity:.4}
 .w-tools button.go{border-color:var(--acc);color:var(--acc);font-weight:600}
 
+.md h2{font-size:14px;color:var(--acc);margin:12px 0 4px;text-transform:uppercase;letter-spacing:.05em}
+.md h3{font-size:14px;margin:10px 0 4px}.md p{margin:4px 0;font-size:13.5px}.md li{margin-left:18px;font-size:13.5px}.md code{color:var(--warn)}
+.pill{display:inline-block;font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--dim);margin-right:4px}
+.pill.data{color:var(--acc);border-color:var(--acc)}.pill.hunch{color:var(--warn);border-color:var(--warn)}.pill.retracted{color:var(--bad);border-color:var(--bad)}
+.btn{border:1px solid var(--line);background:none;color:var(--tx);border-radius:8px;padding:8px 12px;font-size:13px}
+.btn.ok{border-color:var(--acc);color:var(--acc)}.btn.no{border-color:var(--bad);color:var(--bad)}.btn.acc{background:var(--acc);color:#000;border-color:var(--acc);font-weight:600}
+textarea{width:100%;background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:8px;font-size:14px;min-height:70px}
+.ans{white-space:pre-wrap;font-size:13.5px;margin-top:8px}
 </style></head><body>
 <header><h1>FF Agent &mdash; Team &amp; Player Intel</h1><div class="meta" id="meta">loading&hellip;</div></header>
 <main id="main"><div class="spin">Loading&hellip;</div></main>
@@ -92,6 +100,8 @@ input,select{background:var(--card);border:1px solid var(--line);color:var(--tx)
 <button id="nb-flow" onclick="go('flow')">Flow</button>
 <button id="nb-intel" onclick="go('intel')">Intel</button>
 <button id="nb-war" onclick="go('war')">War</button>
+<button id="nb-wiki" onclick="go('wiki')">Wiki</button>
+<button id="nb-props" onclick="go('props')">Gate</button>
 </nav>
 <script>
 const API='https://ekmuzafyqlbqttmfxsgw.supabase.co/functions/v1/ff-dashboard';
@@ -117,8 +127,8 @@ async function boot(){
     TEAMS=await api('teams');
   }catch(e){$('#meta').textContent='API unreachable \u2014 check Supabase functions';}
   go(view)}
-function go(v){view=v;['teams','players','draft','model','league','flow','intel','war'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
-function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='model')modelView();else if(view==='league')leagueView();else if(view==='flow')flow();else if(view==='war')warView();else intel()}
+function go(v){view=v;['teams','players','draft','model','league','flow','intel','war','wiki','props'].forEach(x=>{const b=$('#nb-'+x);if(b)b.classList.toggle('on',x===v)});render()}
+function render(){if(view==='teams')teams();else if(view==='players')players();else if(view==='draft')draftView();else if(view==='model')modelView();else if(view==='league')leagueView();else if(view==='flow')flow();else if(view==='war')warView();else if(view==='wiki')wikiView();else if(view==='props')propsView();else intel()}
 
 let WARMODE=(function(){try{return localStorage.getItem('warmode')||'REHEARSAL'}catch(e){return 'REHEARSAL'}})();
 let WARTIMER=null,WARLAST=null;
@@ -349,5 +359,96 @@ function intel(){
   '<div class="card"><h3>Ingest queue</h3><p class="kv">1. Schedule + byes \u2713 DONE (ESPN, 272 games) \u00b7 2. Remaining win totals \u00b7 3. Post-camp depth charts (CLE/NO/LV/IND QBs) \u00b7 4. 2026 OL/DL grades \u00b7 5. Referee crews (Wk1) \u00b7 6. Weekly PROE/pace (Wk4+, retires coach priors)</p></div>',
   '<div class="card"><h3>Contract layer</h3><p class="kv">17 active flags (as of 2026-08-09): Mayfield, Pickens (tag), Nacua &amp; Adams (LAR), Chase Brown, Kraft, LaPorta, Vea (TB DT dispute), Kyler Murray (MIN prove-it), Brissett (ARI incentives), more. Three-state incentive rule: KNOWN / PARTIAL_PUBLIC / UNKNOWN \u2014 UNKNOWN never means none. Resolved &amp; cleared: Olave, Taylor, Bijan, Gibbs (incentive-monitor kept), Flowers. Canonical doc: repo /layers/.</p></div>',
   '<div class="card"><h3>Provenance</h3><p class="kv">Coach/team intel: hand-verified July 2026. Tendencies are career-history priors, not measured 2026 data. Players: live Sleeper API, timestamped per row. No fabricated numbers \u2014 missing = pending, never backfilled.</p></div>'].join('')}
+
+// ---- WIKI (ff-wiki edge fn; same x-ff-key as dashboard) ----
+const WAPI='https://ekmuzafyqlbqttmfxsgw.supabase.co/functions/v1/ff-wiki';
+async function wapi(body){
+  const call=k=>fetch(WAPI,{method:'POST',headers:{'content-type':'application/json','x-ff-key':k},body:JSON.stringify(body)});
+  let r=await call((function(){try{return localStorage.getItem('ffkey')||''}catch(e){return ''}})());
+  if(r.status===401){try{localStorage.removeItem('ffkey')}catch(e){};r=await call(ffkey());if(r.status===401)return {ok:false,error:'locked'}}
+  return r.json()}
+function md(s){ // tiny markdown: headers, bullets, bold, code, [slug] links, [raw:N]
+  const e=esc(s||'');
+  return e.split('\n').map(l=>{
+    if(/^## /.test(l))return '<h2>'+l.slice(3)+'</h2>';
+    if(/^### /.test(l))return '<h3>'+l.slice(4)+'</h3>';
+    if(/^- /.test(l))return '<li>'+l.slice(2)+'</li>';
+    return l?'<p>'+l+'</p>':'';
+  }).join('')
+  .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/`([^`]+)`/g,'<code>$1</code>')
+  .replace(/\[raw:(\d+)\]/g,'<span class="pill">raw $1</span>')
+  .replace(/\[((?:team|player|manager|model|concept)-[a-z0-9-]+)\]/g,'<a href="#" onclick="wikiPage(\'$1\');return false" style="color:var(--acc)">$1</a>')}
+let WIKI_PAGES=null,WIKI_FILTER='all';
+async function wikiView(){
+  M.innerHTML='<div class="spin">Loading wiki&hellip;</div>';
+  const d=await wapi({op:'pages'}); if(!d.ok){M.innerHTML='<div class="card">'+esc(d.error)+'</div>';return}
+  WIKI_PAGES=d.pages; wikiList()}
+function wikiList(){
+  const types=['all','team','player','manager','model','concept'];
+  let h='<div class="card"><h3>Ask the wiki <span class="badge">Sonnet 5 &middot; cited &middot; proposals gated</span></h3>'+
+   '<textarea id="wq" placeholder="e.g. Is JAX TE+ still justified? What did the audits retract?"></textarea>'+
+   '<div class="row" style="margin-top:8px"><button class="btn acc" onclick="wikiAsk()">Ask</button><input id="ws" placeholder="search pages" oninput="wikiSearch(this.value)"></div><div id="wa"></div></div>';
+  h+='<div class="row" style="flex-wrap:wrap">'+types.map(t=>'<button class="btn'+(WIKI_FILTER===t?' acc':'')+'" onclick="WIKI_FILTER=\''+t+'\';wikiList()">'+t+'</button>').join('')+'</div>';
+  const ps=WIKI_PAGES.filter(p=>p.page_type!=='index'&&(WIKI_FILTER==='all'||p.page_type===WIKI_FILTER));
+  h+='<div class="div-h">'+ps.length+' pages</div>';
+  for(const p of ps)h+='<div class="card" onclick="wikiPage(\''+p.slug+'\')"><h3>'+esc(p.title)+'<span class="pill '+esc(p.confidence)+'">'+esc(p.confidence)+'</span></h3><div class="kv">'+esc(p.page_type)+' &middot; '+esc(p.slug)+' &middot; '+esc((p.updated_at||'').slice(0,10))+' &middot; '+esc(p.updated_by||'')+'</div></div>';
+  M.innerHTML=h}
+async function wikiSearch(q){ if(q.length<3){return}
+  const d=await wapi({op:'search',q}); const wa=$('#wa'); if(!d.ok||!wa)return;
+  wa.innerHTML=d.results.map(r=>'<div class="sec" onclick="wikiPage(\''+r.slug+'\')"><b>'+esc(r.title)+'</b> <span class="pill '+esc(r.confidence)+'">'+esc(r.confidence)+'</span><p>'+r.snippet+'</p></div>').join('')||'<p class="kv">no hits</p>'}
+async function wikiAsk(){
+  const q=$('#wq').value.trim(); if(!q)return; const wa=$('#wa'); wa.innerHTML='<div class="spin">Arch is reading&hellip;</div>';
+  const d=await wapi({op:'query',question:q});
+  if(!d.ok){wa.innerHTML='<div class="sec" style="color:var(--bad)">'+esc(d.error)+'</div>';return}
+  wa.innerHTML='<div class="sec"><span class="pill '+esc(d.confidence)+'">'+esc(d.confidence)+'</span><span class="pill">$'+(d.cost_usd||0).toFixed(3)+'</span>'+
+   (d.proposal_ids&&d.proposal_ids.length?'<span class="pill hunch">'+d.proposal_ids.length+' proposal(s) &rarr; Gate</span>':'')+
+   '<div class="md">'+md(d.answer)+'</div>'+
+   (d.gaps&&d.gaps.length?'<p class="kv" style="margin-top:8px"><b>Gaps:</b> '+d.gaps.map(esc).join(' &middot; ')+'</p>':'')+'</div>'}
+async function wikiPage(slug){
+  M.innerHTML='<div class="spin">Loading&hellip;</div>';
+  const d=await wapi({op:'page',slug}); if(!d.ok){M.innerHTML='<div class="card">'+esc(d.error)+'</div>';return}
+  const p=d.page;
+  let h='<button class="back" onclick="wikiList()">&larr; Wiki</button>';
+  h+='<div class="card"><h3>'+esc(p.title)+'<span class="pill '+esc(p.confidence)+'">'+esc(p.confidence)+'</span></h3><div class="kv">'+esc(p.page_type)+' &middot; updated '+esc((p.updated_at||'').slice(0,16).replace('T',' '))+' by '+esc(p.updated_by||'')+'</div>';
+  h+='<div class="md">'+md(p.body)+'</div>';
+  if((p.sources||[]).length)h+='<div class="sec"><b>Sources</b>'+p.sources.map(s=>'<p class="kv">raw '+esc(String(s.raw_id))+' &middot; '+esc(s.title||'')+(s.url?' &middot; <a style="color:var(--acc)" href="'+esc(s.url)+'" target="_blank">link</a>':'')+'</p>').join('')+'</div>';
+  if((p.links||[]).length)h+='<div class="sec"><b>Links</b><p>'+p.links.map(l=>'<a href="#" onclick="wikiPage(\''+esc(l)+'\');return false" style="color:var(--acc);margin-right:8px">'+esc(l)+'</a>').join('')+'</p></div>';
+  if((d.backlinks||[]).length)h+='<div class="sec"><b>Linked from</b><p>'+d.backlinks.map(b=>'<a href="#" onclick="wikiPage(\''+esc(b.slug)+'\');return false" style="color:var(--acc);margin-right:8px">'+esc(b.slug)+'</a>').join('')+'</p></div>';
+  if((d.changes||[]).length)h+='<div class="sec"><b>History</b>'+d.changes.map(c=>'<p class="kv">'+esc((c.created_at||'').slice(0,10))+' &middot; '+esc(c.action)+' &middot; '+esc(c.summary||'')+'</p>').join('')+'</div>';
+  h+='</div>'; M.innerHTML=h}
+// ---- GATE (proposals) ----
+let PROP_FILTER='pending';
+async function propsView(){
+  M.innerHTML='<div class="spin">Loading proposals&hellip;</div>';
+  const [d,rp]=await Promise.all([wapi({op:'proposals',status:PROP_FILTER==='all'?undefined:PROP_FILTER}),wapi({op:'raw_pending'})]);
+  if(!d.ok){M.innerHTML='<div class="card">'+esc(d.error)+'</div>';return}
+  let h='<div class="card"><h3>Glass-box gate <span class="badge">nothing moves ff_weights / ff_dc_signal without approval</span></h3>'+
+   '<div class="row" style="margin-top:8px">'+['pending','approved','applied','rejected','all'].map(s=>'<button class="btn'+(PROP_FILTER===s?' acc':'')+'" onclick="PROP_FILTER=\''+s+'\';propsView()">'+s+'</button>').join('')+'</div></div>';
+  if(rp.ok&&rp.pending.length)h+='<div class="card"><h3>Raw queue <span class="badge warn">'+rp.pending.length+' not yet ingested</span></h3>'+rp.pending.map(r=>'<p class="kv">#'+r.id+' '+esc(r.title)+' ('+esc(r.source_type)+')</p>').join('')+'<button class="btn" style="margin-top:8px" onclick="propsIngest()">Ingest now</button></div>';
+  h+='<div class="card"><h3>Drop a source</h3><input id="rt" placeholder="title" style="width:100%;margin-top:6px"><div class="row" style="margin-top:6px"><select id="rty"><option>note</option><option>film</option><option>injury</option><option>article</option><option>league_chat</option><option>sleeper_txn</option><option>other</option></select><input id="ru" placeholder="url (optional)"></div><textarea id="rb" placeholder="paste text"></textarea><button class="btn acc" style="margin-top:8px" onclick="propsDrop()">Ingest</button><div id="rres" class="kv"></div></div>';
+  if(!d.proposals.length)h+='<div class="card"><p class="kv">none</p></div>';
+  for(const p of d.proposals){
+    h+='<div class="card"><h3>#'+p.id+' '+esc(p.target_table)+'.'+esc(p.target_key)+(p.target_column?'.'+esc(p.target_column):'')+'<span class="pill '+esc(p.status==='pending'?'hunch':p.status==='rejected'?'retracted':'data')+'">'+esc(p.status)+'</span></h3>';
+    h+='<div class="kv">'+esc((p.proposed_at||'').slice(0,16).replace('T',' '))+' &middot; '+esc(p.confidence)+(p.question?' &middot; '+esc(p.question.slice(0,80)):'')+'</div>';
+    h+='<p style="margin-top:6px"><span style="color:var(--dim)">current</span> <b>'+esc(p.current_value==null?'?':String(p.current_value))+'</b> &rarr; <span style="color:var(--dim)">proposed</span> <b style="color:var(--acc)">'+esc(p.proposed_value)+'</b></p>';
+    h+='<p style="margin-top:6px;font-size:13.5px">'+esc(p.rationale)+'</p>';
+    if((p.evidence_slugs||[]).length)h+='<p class="kv" style="margin-top:4px">evidence: '+p.evidence_slugs.map(s=>'<a href="#" onclick="go(\'wiki\');wikiPage(\''+esc(s)+'\');return false" style="color:var(--acc)">'+esc(s)+'</a>').join(', ')+'</p>';
+    if(p.decided_note)h+='<p class="kv">note: '+esc(p.decided_note)+'</p>';
+    if(p.status==='pending')h+='<div class="row" style="margin-top:10px"><button class="btn ok" onclick="propsDecide('+p.id+',\'approved\')">Approve &amp; apply</button><button class="btn no" onclick="propsDecide('+p.id+',\'rejected\')">Reject</button></div>';
+    h+='</div>'}
+  M.innerHTML=h}
+async function propsDecide(id,status){
+  const note=prompt(status==='approved'?'Note (optional):':'Why reject?')||'';
+  const d=await wapi({op:'decide',id,status,note});
+  if(!d.ok){alert(d.error);return}
+  if(d.applied)alert('Applied: '+d.applied);
+  propsView()}
+async function propsDrop(){
+  const title=$('#rt').value.trim(),body=$('#rb').value.trim(); if(!title||!body){alert('title + text required');return}
+  $('#rres').textContent='Ingesting\u2026';
+  const d=await wapi({op:'ingest_text',title,source_type:$('#rty').value,url:$('#ru').value.trim()||null,body});
+  $('#rres').textContent=d.ok?(d.skipped?d.skipped:('created '+d.created+' / updated '+d.updated+' pages, '+d.proposals+' proposals, $'+(d.cost_usd||0).toFixed(3))):('error: '+d.error);
+  if(d.ok&&!d.skipped)setTimeout(propsView,1500)}
+async function propsIngest(){ M.innerHTML='<div class="spin">Ingesting queue&hellip;</div>'; const d=await wapi({op:'ingest_pending',limit:5}); alert(d.ok?JSON.stringify(d.results.map(r=>r.ok?('raw '+r.raw_id+': +'+r.created+'/~'+r.updated):r.error)):d.error); propsView()}
 boot();
 </script></body></html>
